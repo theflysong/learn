@@ -14,6 +14,26 @@ struct unit {
 	string value;
 };
 
+char escape(char ch)
+{
+	int i = 0, value = 0;
+    switch (ch) {
+        case 'a':case 'A': return '\a'; break;
+        case 'b':case 'B': return '\b'; break;
+        case 'f':case 'F': return '\f'; break;
+        case 'n':case 'N': return '\n'; break;
+        case 'r':case 'R': return '\r'; break;
+        case 't':case 'T': return '\t'; break;
+        case 'v':case 'V': return '\v'; break;
+        case '\\': return '\\'; break;
+        case '\'': return '\''; break;
+        case '\"': return '\"'; break;
+        case '?': return '\?'; break;
+        case '0': return '\0'; break;
+    }
+}
+
+
 class cstream {
 	vector<char> buf;
 	int cnt;
@@ -74,13 +94,38 @@ unit nextUnit(cstream& stream) {
 	else if (opt == '&') {
 		u.opt = unit::LONG;
 		string v;
-		char c = stream.peek();
+		char c = stream.peek ();
 		while (isdigit (c)) {
 			stream.next();
 			v += c;
 			c = stream.peek ();
 		}
 		u.value=v; 
+	}
+	else if (opt == '^') {
+		u.opt = unit::CHAR;
+		string v = "";
+		v += stream.next();
+		if (v == "\\") {
+			v = escape (stream.next());
+		}
+		u.value = v;
+	}
+	else if (opt == '"') {
+		u.opt = unit::STRING; 
+		string v;
+		char c = stream.next();
+		while (c != '"') {
+			if (c == '\\') {
+				c = escape (stream.next());
+			}
+			v += c;
+			c = stream.next();
+		}
+		u.value=v;
+	}
+	else {
+		u.opt = unit::UNKNOW;
 	}
 	return u;
 }
@@ -169,6 +214,17 @@ int main(int argc, char *argv[]) {
 					LongLongToBin(w,ch);
 					fout.write(ch,8);
 					delete ch;
+					break;
+				}
+				case unit::CHAR: {
+					char* ch = new char[1];
+					ch[0] = u.value[0];
+					fout.write(ch,1);
+					delete ch;
+					break;
+				}
+				case unit::STRING: {
+					fout.write(u.value.c_str(), u.value.length());
 					break;
 				}
 				default: {
