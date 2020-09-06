@@ -27,7 +27,7 @@ template<typename T>class Tree {
 		}
 		
 		void addChild(T data) {
-			children.push_back(new Node(data, this))
+			children.push_back(new Node(data, this));
 		}
 		
 		~Node() {
@@ -36,12 +36,56 @@ template<typename T>class Tree {
 			}
 		}
 	};
+	Node* root;
 public:
-	struct pos {
+	struct Pos {
 		friend class Tree;
+		
+		T get() {
+			return node -> data;
+		}
+		
+		vector<Pos> children(Pos parent) {
+			vector<Pos> children;
+			
+			for (Node* node : parent.node -> children) {
+				children.push_back(Pos::makePos(node));
+			}
+			
+			return children;
+		}
+	
+		Pos parent(Pos child) {
+			return Pos::makePos(child.node -> parent);
+		}
+		
+		void addChild(T data, Pos pos) {
+			pos.node -> addChild(data);
+		}
 	private:
+		static Pos makePos(Node* node) {
+			Pos pos;
+			pos.node = node;
+			return pos;
+		}
 		Node* node;
 	};
+	
+	Pos begin() {
+		return Pos::makePos(root); 
+	}
+	
+	Tree() {
+		root = new Node;
+	}
+};
+
+class Lex {
+	
+};
+
+class ASTTree {
+	
 };
 
 int main(void) {
