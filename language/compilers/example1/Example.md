@@ -1,6 +1,6 @@
 ﻿# Example1
 
-实现功能：将只含两个树的中缀表达式转化为后缀表达式(只含+ - * /)
+实现功能：将只含两个数的中缀表达式转化为后缀表达式(只含+ - * /)
 语法：stmt -> digit + digit
       stmt -> digit - digit
       stmt -> digit * digit
