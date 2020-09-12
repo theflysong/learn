@@ -1,6 +1,6 @@
 ﻿# Example2
 
-实现功能：将只含中缀表达式转化为后缀表达式并运行(只含+ - * / ( ))
+实现功能：将中缀表达式转化为前缀表达式(只含+ - * / ( ))
 语法：list -> list + digit
       list -> list - digit
       list -> list * digit

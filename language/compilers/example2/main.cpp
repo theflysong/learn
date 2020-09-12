@@ -6,6 +6,7 @@ struct Token {
 		EMPTY = 0,
 		DIGIT,
 		OPERATOR,
+		BUCKET
 	};
 	Type type;
 	string value;
@@ -91,14 +92,18 @@ class Lexer {
 	vector<Token> tokens;
 	Token get(string buffer) {
 		if (isdigit(buffer[0])) {
-			return Token::makeToken(Token::Type::DIGIT, buffer.substr(0, 1));
+			int cnt = 0;
+			while (isdigit(buffer[cnt ++]));
+			return Token::makeToken(Token::Type::DIGIT, buffer.substr(0, cnt - 1));
 		}
 		if (buffer[0] == ' ' || buffer[0] == '\n' || buffer[0] == '\r' || buffer[0] == '\t') {
 			return Token::makeToken(Token::Type::EMPTY, " ");
 		}
-		
 		if (buffer[0] == '+' || buffer[0] == '-' || buffer[0] == '*' || buffer[0] == '/') {
 			return Token::makeToken(Token::Type::OPERATOR, buffer.substr(0, 1));
+		}
+		if (buffer[0] == '(' || buffer[0] == ')') {
+			return Token::makeToken(Token::Type::BUCKET, buffer.substr(0, 1));
 		}
 		return EMPTY;
 	}
