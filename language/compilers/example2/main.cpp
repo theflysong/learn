@@ -6,7 +6,7 @@ struct Token {
 		EMPTY = 0,
 		DIGIT,
 		OPERATOR,
-		BUCKET
+		BRACKET
 	};
 	Type type;
 	string value;
@@ -72,6 +72,17 @@ public:
 		Pos addChild(T data) {
 			return Pos::makePos(this -> node -> addChild(data));
 		}
+		
+		void addTree(Tree<T>* tree) {
+			vector<Node*> children = tree -> root -> children;
+			
+			for (Node* child : children) {
+				this -> node -> addChild(child);
+			}
+			
+			tree -> root -> children.clear();
+			delete tree;
+		}
 	private:
 		static Pos makePos(Node* node) {
 			Pos pos;
@@ -85,6 +96,9 @@ public:
 	}
 	Tree() {
 		root = new Node;
+	}
+	~Tree() {
+		delete root;
 	}
 };
 
@@ -103,7 +117,7 @@ class Lexer {
 			return Token::makeToken(Token::Type::OPERATOR, buffer.substr(0, 1));
 		}
 		if (buffer[0] == '(' || buffer[0] == ')') {
-			return Token::makeToken(Token::Type::BUCKET, buffer.substr(0, 1));
+			return Token::makeToken(Token::Type::BRACKET, buffer.substr(0, 1));
 		}
 		return EMPTY;
 	}
@@ -135,51 +149,114 @@ class ASTTree {
 			printTree(child.children(), lvl + 1, out);
 		}
 	}
-	Tree<Token> tokens;
-public:
-	void parse(Lexer& lexer) {
-		vector<Token> toks(lexer.tokens);
-		reverse(toks.begin(), toks.end());
-		auto pos = tokens.begin();
-		for (int i = 0 ; i < toks.size() ; i ++) {
-			Token token = toks[i];
-			if (token.type == Token::Type::DIGIT) {
-				Token op = toks[++ i];
-				if (op.type == Token::Type::OPERATOR) {
-					if (toks[++ i].type == Token::Type::DIGIT) {
-						auto opt = pos.addChild(op);
-						opt.addChild(token);
-						opt.addChild(toks[i]);
+	class ExpTreeGenerator {
+		static Token nextToken(vector<Token> tokens) {
+			static int pos = 0;
+			return tokens[pos ++];
+		}
+	public:
+		static Tree<Token>* genPrefixExpTree(vector<Token> tokens) {
+			auto tree = new Tree<Token>;
+			
+			Token token = nextToken(tokens);
+			
+			auto pos = tree -> begin().addChild(token);
+			
+			if (token.type == Token::Type::OPERATOR) {
+				pos.addTree(genPrefixExpTree(tokens));
+				pos.addTree(genPrefixExpTree(tokens));
+			}
+			
+			return tree;
+		}
+		static inline Tree<Token>* genInfixExpTree(vector<Token> tokens) {
+			reverse(tokens.begin(), tokens.end());
+			vector<Token> exps;
+			stack<Token> args;
+			stack<Token> opts;
+			for (Token token : tokens) {
+				switch (token.type) {
+					case Token::Type::DIGIT: {
+						args.push(token);
+						break;
+					}
+					case Token::Type::OPERATOR: {
+						if (opts.size() == 0 || opts.top().type == Token::Type::BRACKET || 
+							(((opts.top().value == "+") || (opts.top().value == "-")) ^ ((token.value == "*") || (token.value == "/")))) {
+							opts.push(token);
+							break;
+						}
+						Token opt = opts.top();
+						opts.pop();
+						opts.push(token);
+						opts.push(opt);
+						break;
+					}
+					case Token::Type::BRACKET: {
+						if (token.value == ")") {
+							opts.push(token);
+						}
+						else {
+							while (opts.top().value != ")") {
+								args.push(opts.top());
+								opts.pop();
+							}
+							opts.pop();
+						}
+						break;
 					}
 				}
 			}
+			while (! opts.empty()) {
+				args.push(opts.top());
+				opts.pop();
+			}
+			
+			while (! args.empty()) {
+				exps.push_back(args.top());
+				args.pop();
+			}
+			
+			return genPrefixExpTree(exps);
 		}
+	};
+	Tree<Token>* tokens;
+public:
+	void parse(Lexer& lexer) {
+		vector<Token> toks(lexer.tokens);
+		tokens -> begin().addTree(ExpTreeGenerator::genInfixExpTree(toks));
 	}
 	void printTree(ostream& out) {
 		out << "root" << endl;
-		printTree(tokens.begin().children(), 1, out);
+		printTree(tokens -> begin().children(), 1, out);
+	}
+	ASTTree() {
+		tokens = new Tree<Token>;
+	}
+	~ASTTree() {
+		delete tokens;
 	}
 	friend class Compiler;
 };
 
 class Compiler {
-public:
-	void compile(ASTTree ast, ostream& out) {
-		auto pos = ast.tokens.begin();
-		auto opt = pos.children()[0];
-		Token op = opt.get();
-		if (op.type == Token::Type::OPERATOR) {
-			out << op.value << " ";
-			auto args = opt.children();
-			if (args.size() == 2) {
-				for (auto parg : args) {
-					Token arg = parg.get();
-					if (arg.type == Token::Type::DIGIT) {
-						out << arg.value << " ";
-					}
-				}
+	class ExpGen {
+	public:
+		static string genPrefixExp(Tree<Token>::Pos start) {
+			string result = start.get().value + " ";
+			
+			for (auto pos : start.children()) {
+				result += genPrefixExp(pos);
 			}
+			
+			return result;
 		}
+	};
+public:
+	void compile(ASTTree &ast, ostream& out) {
+		string result = "";
+		result = ExpGen::genPrefixExp(ast.tokens -> begin().children()[0]);
+		out << result;
 	}
 };
 
@@ -188,23 +265,29 @@ int main(int argv, char **argc) {
 	if (opt == "-o") {
 		ifstream source(argc[1]);
 		ofstream output(argc[3]);
-		Lexer lexer;
-		ASTTree ast;
-		Compiler compiler;
-		lexer.lex(source);
-		ast.parse(lexer);
-		ast.printTree(cout);
-		compiler.compile(ast, output);
+		Lexer* lexer = new Lexer;
+		ASTTree* ast = new ASTTree;
+		Compiler* compiler = new Compiler;
+		lexer -> lex(source);
+		ast -> parse(*lexer);
+		ast -> printTree(cout);
+	    compiler -> compile(*ast, output);
+	    delete lexer;
+	    delete ast;
+	    delete compiler;
 	}
 	else if (opt == "-p") {
 		ifstream source(argc[1]);
 		ofstream output(argc[3]);
-		Lexer lexer;
-		ASTTree ast;
-		Compiler compiler;
-		lexer.lex(source);
-		ast.parse(lexer);
-		ast.printTree(output);
+		Lexer* lexer = new Lexer;
+		ASTTree* ast = new ASTTree;
+		Compiler* compiler = new Compiler;
+		lexer -> lex(source);
+		ast -> parse(*lexer);
+		ast -> printTree(output);
+	    delete lexer;
+	    delete ast;
+	    delete compiler;
 	}
 	else {
 		cerr << "Unknow Command " << opt << " find";
@@ -212,4 +295,3 @@ int main(int argv, char **argc) {
 	}
 	return 0;
 }
-
